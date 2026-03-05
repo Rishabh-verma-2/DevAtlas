@@ -1,0 +1,636 @@
+================================================================================
+         DEVATLAS — ENGINEERING BLUEPRINT (FILE 1 of 2)
+    Architecture · Development Roadmap · Folder Structure · API Design
+================================================================================
+
+Author  : Senior Full-Stack Architect
+Project : DevAtlas
+Stack   : Next.js · Node.js/Express · MongoDB · GitHub OAuth
+Date    : March 2026
+
+
+================================================================================
+SECTION 1 — FULL SYSTEM ARCHITECTURE
+================================================================================
+
+1.1  HIGH-LEVEL ARCHITECTURE
+─────────────────────────────
+
+  ┌──────────────────────────────────────────────────────┐
+  │                  CLIENT (Browser)                    │
+  │  Next.js 14 App Router · React · Tailwind · ShadCN  │
+  │        Mapbox GL JS · TanStack Query                 │
+  └────────────────────────┬─────────────────────────────┘
+                           │  HTTPS / REST
+  ┌────────────────────────▼─────────────────────────────┐
+  │               BACKEND (API Server)                   │
+  │          Node.js + Express.js (REST API)             │
+  │  GitHub OAuth · JWT Sessions · Rate Limiter · Redis  │
+  └─────┬──────────────────┬───────────────┬─────────────┘
+        │                  │               │
+  ┌─────▼─────┐  ┌─────────▼──────┐  ┌────▼───────────────┐
+  │  MongoDB  │  │ GitHub REST/GQL│  │  Geocoding API     │
+  │ (Atlas)   │  │     API        │  │ (Mapbox/OpenCage)  │
+  └───────────┘  └────────────────┘  └────────────────────┘
+        │
+  ┌─────▼─────┐  ┌────────────────┐
+  │   Redis   │  │ GitHub Webhook │
+  │  (Cache)  │  │   Listener     │
+  └───────────┘  └────────────────┘
+
+
+1.2  DATA FLOW — END TO END
+────────────────────────────
+  Step 1:  User clicks "Sign in with GitHub"
+  Step 2:  Browser redirected to GitHub OAuth authorization URL
+  Step 3:  GitHub redirects back with auth code
+  Step 4:  Backend exchanges code for access token
+  Step 5:  Backend calls GitHub REST API → fetches user profile
+  Step 6:  Location string extracted (e.g. "Ahmedabad, India")
+  Step 7:  Location sent to Geocoding API → returns lat/lng
+  Step 8:  Developer document upserted in MongoDB with GeoJSON coords
+  Step 9:  JWT issued to browser (HTTP-only cookie)
+  Step 10: Frontend loads map → calls GET /api/developers
+  Step 11: Markers rendered on Mapbox map
+  Step 12: User clicks marker → profile popup shown
+  Step 13: GitHub webhooks push updates → activity scores refreshed
+
+
+1.3  AUTHENTICATION FLOW (GitHub OAuth)
+─────────────────────────────────────────
+  CLIENT               BACKEND                  GITHUB
+    │                     │                        │
+    │── GET /auth/github ─▶│                        │
+    │                     │── Redirect to OAuth ───▶│
+    │◀── redirect ─────────│◀── code + state ────────│
+    │── GET /callback ────▶│── POST /access_token ──▶│
+    │                     │◀── access_token ─────────│
+    │                     │── GET /user ────────────▶│
+    │                     │◀── profile JSON ──────────│
+    │                     │ [geocode location]        │
+    │                     │ [upsert MongoDB]          │
+    │                     │ [issue JWT cookie]        │
+    │◀── redirect /map ────│                          │
+
+
+1.4  GEOLOCATION CONVERSION FLOW
+──────────────────────────────────
+  Input   : "Ahmedabad, India"
+  API Call: GET https://api.mapbox.com/geocoding/v5/mapbox.places/
+            Ahmedabad%2C%20India.json?access_token=YOUR_TOKEN
+  Output  : { longitude: 72.5714, latitude: 23.0225 }
+
+  Stored in MongoDB as GeoJSON:
+    location: {
+      type: "Point",
+      coordinates: [72.5714, 23.0225]   // [longitude, latitude]
+    }
+
+  MongoDB 2dsphere index enables fast geospatial queries.
+
+
+1.5  MAP VISUALIZATION FLOW
+────────────────────────────
+  - Frontend loads Mapbox GL JS on /map page mount
+  - React Query fetches GET /api/developers (with bbox or pagination)
+  - Each developer rendered as custom HTML marker (avatar circle)
+  - Supercluster.js clusters nearby markers at low zoom levels
+  - On marker click → Mapbox Popup shows DeveloperPopup component
+  - Filter sidebar allows filtering by language, country, followers
+  - Users can search by username or location
+
+
+1.6  REAL-TIME WEBHOOK FLOW
+─────────────────────────────
+  GitHub sends POST events to: https://api.devatlas.dev/webhooks/github
+
+  Events handled:
+    push    → update commit count, recalculate activity score
+    create  → new repository created
+    watch   → star received
+    public  → repository made public
+
+  Process:
+    1. Verify HMAC-SHA256 signature (X-Hub-Signature-256 header)
+    2. Extract sender username from payload
+    3. Update activity document in MongoDB
+    4. Recalculate activity score
+    5. Broadcast update via Socket.IO to connected clients
+
+
+================================================================================
+SECTION 2 — DEVELOPMENT ROADMAP
+================================================================================
+
+PHASE 0 — FOUNDATION  (Week 1)
+────────────────────────────────
+  [ ] Initialize GitHub monorepo (DevAtlas/)
+  [ ] Set up Next.js 14 frontend (App Router, TypeScript, Tailwind, ShadCN)
+  [ ] Set up Express.js backend (Node.js, MongoDB, Redis)
+  [ ] Configure ESLint, Prettier, Husky pre-commit hooks
+  [ ] Create environment variable files (.env.local, .env)
+  [ ] Create MongoDB Atlas cluster
+  [ ] Set up Redis Cloud (free tier)
+  [ ] Register GitHub OAuth App → get CLIENT_ID + CLIENT_SECRET
+  [ ] Register Mapbox account → API token
+  [ ] Register OpenCage/Mapbox for geocoding
+  [ ] Set up Postman workspace for API testing
+  MILESTONE: Dev environment fully running locally
+
+
+PHASE 1 — AUTHENTICATION  (Week 2)
+─────────────────────────────────────
+  [ ] Backend: GET /auth/github → redirect to GitHub OAuth
+  [ ] Backend: GET /auth/github/callback
+        → exchange code for access token
+        → fetch GitHub profile
+        → geocode location
+        → upsert developer in MongoDB
+        → issue JWT in HTTP-only cookie
+  [ ] Backend: GET /auth/me → return current user
+  [ ] Backend: POST /auth/logout → clear cookie
+  [ ] Frontend: "Sign in with GitHub" button
+  [ ] Frontend: auth context with TanStack Query
+  [ ] Frontend: protected route middleware
+  [ ] Test full OAuth flow end to end
+  MILESTONE: Users can log in with GitHub and appear in database
+
+
+PHASE 2 — MAP CORE  (Week 3)
+──────────────────────────────
+  [ ] Backend: GET /api/developers → paginated developer list
+  [ ] Backend: GET /api/developers/:username → single profile
+  [ ] Backend: GET /api/developers/nearby → geospatial query
+  [ ] Frontend: integrate Mapbox GL JS on /map page
+  [ ] Frontend: render developer markers on map
+  [ ] Frontend: DeveloperPopup card on marker click
+  [ ] Frontend: Supercluster.js for marker clustering
+  [ ] Frontend: map controls (zoom, fullscreen, locate me)
+  MILESTONE: Global map shows real developer markers
+
+
+PHASE 3 — DEVELOPER PROFILES  (Week 4)
+──────────────────────────────────────────
+  [ ] Backend: GET /api/developers/:username/repos
+  [ ] Backend: GET /api/developers/:username/languages
+  [ ] Backend: GET /api/developers/:username/activity
+  [ ] Frontend: /developer/[username] profile page
+        → avatar, bio, location, followers, repos
+        → language breakdown chart (Recharts)
+        → pinned repositories
+        → contribution heatmap
+  [ ] Frontend: Nearby Developers panel
+  [ ] Integrate GitHub GraphQL API for richer data
+  MILESTONE: Full developer profile pages live
+
+
+PHASE 4 — DISCOVERY & STATS  (Week 5)
+──────────────────────────────────────────
+  [ ] Backend: GET /api/stats/global
+  [ ] Backend: GET /api/stats/languages
+  [ ] Backend: GET /api/stats/countries
+  [ ] Backend: GET /api/developers/trending
+  [ ] Frontend: Global Statistics page (/stats)
+        → total developers, countries, contributions
+        → top languages bar chart
+        → most active countries list
+  [ ] Frontend: Trending Developers section (/trending)
+  [ ] Frontend: search + filter sidebar (language, country, followers)
+  MILESTONE: Discovery features fully functional
+
+
+PHASE 5 — REAL-TIME ACTIVITY  (Week 6)
+──────────────────────────────────────────
+  [ ] Backend: POST /webhooks/github
+        → HMAC-SHA256 signature verification
+        → process push/star/repo events
+        → update developer activity in MongoDB
+  [ ] Backend: Socket.IO or SSE for broadcasting updates
+  [ ] Frontend: subscribe to real-time activity events
+  [ ] Frontend: pulsing marker animation for recently active devs
+  [ ] Set up GitHub Webhook in GitHub developer settings
+  MILESTONE: Real-time commit activity reflected on map
+
+
+PHASE 6 — POLISH & PRODUCTION PREP  (Week 7-8)
+─────────────────────────────────────────────────
+  [ ] Rate limiting on all endpoints (express-rate-limit)
+  [ ] Redis caching for all API responses
+  [ ] Request logging (Morgan + Winston)
+  [ ] Error monitoring (Sentry)
+  [ ] SEO meta tags (OpenGraph, Twitter cards)
+  [ ] robots.txt and sitemap.xml
+  [ ] Lighthouse performance audit
+  [ ] Integration tests (Jest + Supertest)
+  [ ] E2E tests (Playwright)
+  [ ] Security audit (Helmet.js, CORS, CSP headers)
+  MILESTONE: Production-ready application
+
+
+PHASE 7 — DEPLOYMENT  (Week 9)
+─────────────────────────────────
+  [ ] Deploy backend to Render / Railway
+  [ ] Deploy frontend to Vercel
+  [ ] Configure custom domain (devatlas.dev)
+  [ ] SSL auto-configured via Vercel and Render
+  [ ] MongoDB Atlas production cluster
+  [ ] Redis Cloud production instance
+  [ ] GitHub Actions CI/CD pipeline
+  [ ] Set environment variables in deployment platforms
+  MILESTONE: DevAtlas is live in production
+
+
+================================================================================
+SECTION 3 — FOLDER STRUCTURES
+================================================================================
+
+3.1  MONOREPO ROOT
+────────────────────
+  DevAtlas/
+  ├── frontend/               ← Next.js App Router
+  ├── backend/                ← Node.js + Express API
+  ├── .github/
+  │   └── workflows/
+  │       ├── frontend.yml
+  │       └── backend.yml
+  ├── .gitignore
+  └── README.md
+
+
+3.2  FRONTEND (Next.js 14 App Router)
+──────────────────────────────────────
+  frontend/
+  ├── public/
+  │   ├── marker-icon.svg
+  │   └── og-image.png
+  │
+  ├── src/
+  │   ├── app/
+  │   │   ├── layout.tsx               ← Root layout
+  │   │   ├── page.tsx                 ← Landing "/"
+  │   │   ├── globals.css
+  │   │   ├── map/
+  │   │   │   └── page.tsx             ← Global map "/map"
+  │   │   ├── developer/
+  │   │   │   └── [username]/
+  │   │   │       └── page.tsx         ← Profile "/developer/:username"
+  │   │   ├── trending/
+  │   │   │   └── page.tsx
+  │   │   ├── stats/
+  │   │   │   └── page.tsx
+  │   │   ├── nearby/
+  │   │   │   └── page.tsx
+  │   │   └── auth/
+  │   │       └── callback/
+  │   │           └── page.tsx         ← OAuth callback
+  │   │
+  │   ├── components/
+  │   │   ├── ui/                      ← ShadCN base components
+  │   │   │   ├── button.tsx
+  │   │   │   ├── badge.tsx
+  │   │   │   ├── card.tsx
+  │   │   │   ├── avatar.tsx
+  │   │   │   ├── dialog.tsx
+  │   │   │   └── skeleton.tsx
+  │   │   ├── map/
+  │   │   │   ├── DevMap.tsx           ← Main Mapbox container
+  │   │   │   ├── DeveloperMarker.tsx  ← Custom map marker
+  │   │   │   ├── DeveloperPopup.tsx   ← Popup on marker click
+  │   │   │   ├── MapControls.tsx
+  │   │   │   ├── MapFilters.tsx
+  │   │   │   └── ClusterMarker.tsx
+  │   │   ├── developer/
+  │   │   │   ├── ProfileHero.tsx
+  │   │   │   ├── RepoCard.tsx
+  │   │   │   ├── LanguageChart.tsx
+  │   │   │   ├── ContributionGrid.tsx
+  │   │   │   ├── NearbyList.tsx
+  │   │   │   └── TrendingCard.tsx
+  │   │   ├── stats/
+  │   │   │   ├── GlobalCounter.tsx
+  │   │   │   ├── LanguageBar.tsx
+  │   │   │   ├── CountryList.tsx
+  │   │   │   └── ActivityFeed.tsx
+  │   │   └── layout/
+  │   │       ├── Navbar.tsx
+  │   │       ├── Footer.tsx
+  │   │       └── Sidebar.tsx
+  │   │
+  │   ├── hooks/
+  │   │   ├── useAuth.ts
+  │   │   ├── useDevelopers.ts
+  │   │   ├── useNearby.ts
+  │   │   ├── useTrending.ts
+  │   │   ├── useGlobalStats.ts
+  │   │   └── useWebSocket.ts
+  │   │
+  │   ├── lib/
+  │   │   ├── api.ts                   ← Axios instance
+  │   │   ├── queryClient.ts           ← TanStack Query config
+  │   │   ├── mapbox.ts
+  │   │   └── utils.ts
+  │   │
+  │   ├── types/
+  │   │   ├── developer.ts
+  │   │   ├── api.ts
+  │   │   └── map.ts
+  │   │
+  │   └── providers/
+  │       ├── QueryProvider.tsx
+  │       └── AuthProvider.tsx
+  │
+  ├── .env.local
+  ├── next.config.ts
+  ├── tailwind.config.ts
+  ├── tsconfig.json
+  └── package.json
+
+
+3.3  BACKEND (Node.js + Express)
+──────────────────────────────────
+  backend/
+  ├── src/
+  │   ├── config/
+  │   │   ├── db.js                    ← Mongoose connection
+  │   │   ├── redis.js                 ← Redis client
+  │   │   ├── passport.js              ← GitHub OAuth strategy
+  │   │   └── env.js                   ← Env variable validation
+  │   │
+  │   ├── models/
+  │   │   ├── Developer.js             ← Main schema
+  │   │   ├── Activity.js              ← GitHub events
+  │   │   └── Stats.js                 ← Platform stats cache
+  │   │
+  │   ├── routes/
+  │   │   ├── auth.routes.js
+  │   │   ├── developer.routes.js
+  │   │   ├── stats.routes.js
+  │   │   └── webhook.routes.js
+  │   │
+  │   ├── controllers/
+  │   │   ├── auth.controller.js
+  │   │   ├── developer.controller.js
+  │   │   ├── stats.controller.js
+  │   │   └── webhook.controller.js
+  │   │
+  │   ├── services/
+  │   │   ├── github.service.js        ← GitHub REST + GraphQL calls
+  │   │   ├── geocoding.service.js     ← Location to lat/lng
+  │   │   ├── activity.service.js      ← Activity score calculation
+  │   │   └── cache.service.js         ← Redis helpers
+  │   │
+  │   ├── middleware/
+  │   │   ├── auth.middleware.js       ← JWT verification
+  │   │   ├── rateLimiter.js
+  │   │   ├── validate.js              ← Request validation (Zod)
+  │   │   ├── errorHandler.js
+  │   │   └── logger.js
+  │   │
+  │   ├── utils/
+  │   │   ├── jwt.js
+  │   │   ├── crypto.js                ← HMAC signature verification
+  │   │   ├── activityScore.js
+  │   │   └── pagination.js
+  │   │
+  │   └── app.js                       ← Express app setup
+  │
+  ├── server.js                        ← Entry point
+  ├── .env
+  ├── package.json
+  └── Dockerfile
+
+
+================================================================================
+SECTION 4 — API DESIGN
+================================================================================
+
+4.1  BASE URL
+──────────────
+  Development : http://localhost:5000
+  Production  : https://api.devatlas.dev
+
+
+4.2  AUTHENTICATION ENDPOINTS
+──────────────────────────────
+
+  GET  /auth/github
+    Description : Initiates GitHub OAuth flow
+    Auth        : Public
+    Response    : 302 Redirect to GitHub authorization page
+
+  GET  /auth/github/callback?code=xxx&state=yyy
+    Description : GitHub redirects here after user authorizes
+    Auth        : Public
+    Process     :
+      1. Exchange code for access_token via GitHub
+      2. Fetch GitHub user profile (GET /user)
+      3. Geocode location string to lat/lng
+      4. Upsert developer document in MongoDB
+      5. Issue signed JWT in HTTP-only cookie
+    Response    : 302 Redirect to /map on frontend
+
+  GET  /auth/me
+    Description : Returns currently authenticated user
+    Auth        : JWT cookie (required)
+    Response    :
+      {
+        "success": true,
+        "data": {
+          "_id": "...",
+          "username": "john-doe",
+          "name": "John Doe",
+          "avatarUrl": "...",
+          "bio": "Software Engineer",
+          "location": "Ahmedabad, India",
+          "coordinates": { "lat": 23.0225, "lng": 72.5714 },
+          "followers": 320,
+          "publicRepos": 45,
+          "topLanguages": ["JavaScript", "Python", "Go"]
+        }
+      }
+
+  POST  /auth/logout
+    Description : Clears JWT cookie
+    Auth        : JWT cookie (required)
+    Response    : { "success": true, "message": "Logged out" }
+
+
+4.3  DEVELOPER ENDPOINTS
+─────────────────────────
+
+  GET  /api/developers
+    Description : Paginated developer list for map
+    Auth        : Public
+    Query Params:
+      page        (default: 1)
+      limit       (default: 50, max: 200)
+      language    (e.g. "Python")
+      country     (e.g. "India")
+      minFollowers
+      bbox        (minLng,minLat,maxLng,maxLat bounding box)
+    Response    :
+      {
+        "success": true,
+        "data": [
+          {
+            "username": "john-doe",
+            "avatarUrl": "...",
+            "name": "John Doe",
+            "coordinates": [72.5714, 23.0225],
+            "followers": 320,
+            "publicRepos": 45,
+            "topLanguages": ["JavaScript", "Python"],
+            "activityScore": 87.4
+          }
+        ],
+        "pagination": { "page": 1, "limit": 50, "total": 12500 }
+      }
+
+  GET  /api/developers/:username
+    Description : Full profile for a single developer
+    Auth        : Public
+    Response    :
+      {
+        "success": true,
+        "data": {
+          "username": "john-doe",
+          "name": "John Doe",
+          "avatarUrl": "...",
+          "githubUrl": "https://github.com/john-doe",
+          "bio": "...",
+          "company": "...",
+          "blog": "...",
+          "location": "Ahmedabad, India",
+          "coordinates": [72.5714, 23.0225],
+          "followers": 320,
+          "following": 85,
+          "publicRepos": 45,
+          "topLanguages": [{ "name": "JavaScript", "bytes": 128000 }],
+          "pinnedRepos": [{ "name": "...", "stars": 45, "forks": 12 }],
+          "activityScore": 87.4,
+          "lastActive": "2026-03-01T10:00:00Z"
+        }
+      }
+
+  GET  /api/developers/:username/repos
+    Description : Developer's public repositories
+    Auth        : Public
+    Query Params: sort (stars|forks|updated), limit (default: 10)
+
+  GET  /api/developers/:username/languages
+    Description : Aggregated language stats
+    Auth        : Public
+    Response    :
+      {
+        "success": true,
+        "data": [
+          { "language": "JavaScript", "percentage": 68.4 },
+          { "language": "Python",     "percentage": 21.2 }
+        ]
+      }
+
+  GET  /api/developers/nearby
+    Description : Developers within a radius
+    Auth        : Public
+    Query Params: lat, lng (required), radius (km, default: 50), limit
+    Response    :
+      {
+        "success": true,
+        "data": [
+          {
+            "username": "dev-nearby",
+            "location": "Surat, India",
+            "distance": 265,
+            "topLanguages": ["Go", "Rust"]
+          }
+        ]
+      }
+
+  GET  /api/developers/trending
+    Description : Trending developers by activity score
+    Auth        : Public
+    Query Params: period (day|week|month), limit (default: 20)
+
+  POST  /api/developers/refresh
+    Description : Re-fetch current user's GitHub data
+    Auth        : JWT (required)
+    Response    : { "success": true, "message": "Profile refreshed" }
+
+
+4.4  STATISTICS ENDPOINTS
+──────────────────────────
+
+  GET  /api/stats/global
+    Response: { totalDevelopers, totalCountries, totalLanguages, totalRepos }
+
+  GET  /api/stats/languages
+    Response: [{ language, developerCount, percentage }]
+
+  GET  /api/stats/countries
+    Response: [{ country, count, percentage }]
+
+
+4.5  WEBHOOK ENDPOINT
+──────────────────────
+
+  POST  /webhooks/github
+    Auth        : HMAC-SHA256 signature (X-Hub-Signature-256 header)
+    Events      : push, create, watch, public
+    Process     :
+      1. Verify HMAC-SHA256 signature
+      2. Extract sender username from payload
+      3. Update activity document in MongoDB
+      4. Recalculate activity score
+      5. Broadcast update via Socket.IO
+    Response    : 200 OK
+
+
+4.6  API CONVENTIONS
+──────────────────────
+
+  Standard response envelope:
+    { "success": true|false, "data": {}, "message": "", "pagination": {} }
+
+  HTTP Status Codes:
+    200 OK · 201 Created · 400 Bad Request · 401 Unauthorized
+    403 Forbidden · 404 Not Found · 429 Rate Limited · 500 Server Error
+
+  Rate Limits (Redis-backed):
+    Public endpoints  : 100 req / 15 min / IP
+    Auth endpoints    : 20  req / 15 min / IP
+    Webhook           : No limit (signature verified)
+
+  Redis Cache TTLs:
+    /api/developers          : 60 seconds
+    /api/developers/:username : 300 seconds
+    /api/stats/*             : 600 seconds
+    /api/developers/nearby   : 30 seconds
+
+
+4.7  GITHUB API INTEGRATION STRATEGY
+──────────────────────────────────────
+
+  REST API (during OAuth callback):
+    GET https://api.github.com/user                    → profile
+    GET https://api.github.com/user/repos?per_page=100 → repos
+
+  GraphQL API (pinned repos + contribution data):
+    POST https://api.github.com/graphql
+    Query: {
+      user(login: "username") {
+        pinnedItems(first: 6) { ... }
+        contributionsCollection { contributionCalendar { ... } }
+      }
+    }
+
+  Rate Limit Management:
+    - Store each user's GitHub access token (encrypted) in MongoDB
+    - Use user token for authenticated calls (5000 req/hr limit)
+    - Cache all GitHub API responses in Redis with TTLs
+    - Implement request queue for batch refreshes
+    - Fall back to unauthenticated calls for public data (60 req/hr)
+
+
+================================================================================
+                            END OF FILE 1
+================================================================================

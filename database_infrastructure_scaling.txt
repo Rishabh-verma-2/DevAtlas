@@ -1,0 +1,705 @@
+================================================================================
+         DEVATLAS — ENGINEERING BLUEPRINT (FILE 2 of 2)
+        Database Schema · Infrastructure · Scaling · Security
+================================================================================
+
+Author  : Senior Full-Stack Architect
+Project : DevAtlas
+Stack   : Next.js · Node.js/Express · MongoDB · GitHub OAuth
+Date    : March 2026
+
+
+================================================================================
+SECTION 1 — DATABASE SCHEMA DESIGN
+================================================================================
+
+1.1  OVERVIEW
+──────────────
+  Database : MongoDB (Atlas)
+  ODM      : Mongoose
+  Collections:
+    1. developers    ← Core developer profiles + geolocation
+    2. activities    ← GitHub event logs per developer
+    3. stats         ← Aggregated platform statistics (cache)
+
+
+1.2  DEVELOPERS COLLECTION
+────────────────────────────
+
+  Collection name: developers
+
+  {
+    _id            : ObjectId (auto),
+
+    // GitHub Identity
+    githubId       : String,  (UNIQUE, INDEXED)  ← GitHub user ID
+    username       : String,  (UNIQUE, INDEXED)  ← GitHub login
+    name           : String,                     ← Display name
+    avatarUrl      : String,                     ← GitHub avatar URL
+    githubUrl      : String,                     ← Profile URL
+    bio            : String,
+    company        : String,
+    blog           : String,
+    email          : String,
+    twitterUsername: String,
+
+    // Location
+    locationRaw    : String,      ← Raw text from GitHub ("Ahmedabad, India")
+    city           : String,      ← Parsed city
+    country        : String,      ← Parsed country (INDEXED)
+    location       : {            ← GeoJSON Point (2dsphere INDEXED)
+      type         : "Point",
+      coordinates  : [Number, Number]   ← [longitude, latitude]
+    },
+
+    // GitHub Stats
+    followers      : Number,      (INDEXED)
+    following      : Number,
+    publicRepos    : Number,
+    publicGists    : Number,
+
+    // Languages
+    topLanguages         : [String],   (INDEXED)  ← e.g. ["JavaScript", "Python"]
+    languageBreakdown    : [
+      {
+        language   : String,
+        bytes      : Number,
+        percentage : Number
+      }
+    ],
+
+    // Auth & Token
+    accessToken    : String,    ← Encrypted GitHub OAuth token
+    tokenUpdatedAt : Date,
+
+    // Activity & Scoring
+    activityScore  : Number,    (INDEXED)  ← Calculated score 0-100
+    commitCount    : Number,               ← Total tracked commits
+    starCount      : Number,               ← Stars received
+    lastCommitAt   : Date,
+    lastActive     : Date,      (INDEXED)
+
+    // Platform Metadata
+    isGeolocated   : Boolean,   ← true if coordinates exist
+    isActive       : Boolean,   ← false = account disabled
+    refreshedAt    : Date,      ← Last time GitHub data was re-fetched
+    createdAt      : Date,
+    updatedAt      : Date
+  }
+
+  Indexes:
+    { githubId: 1 }               unique
+    { username: 1 }               unique
+    { location: "2dsphere" }      geospatial
+    { country: 1 }
+    { topLanguages: 1 }
+    { followers: -1 }
+    { activityScore: -1 }
+    { lastActive: -1 }
+    { country: 1, followers: -1 } compound (for country leaderboard)
+
+
+1.3  ACTIVITIES COLLECTION
+────────────────────────────
+
+  Collection name: activities
+
+  {
+    _id            : ObjectId (auto),
+    developerId    : ObjectId,  (INDEXED, ref: developers)
+    username       : String,    (INDEXED)
+
+    // Event Info
+    eventType      : String,    ← "push" | "create" | "watch" | "public"
+    repoName       : String,
+    repoUrl        : String,
+    commitCount    : Number,    ← Number of commits (for push events)
+    branch         : String,    ← Branch name (for push events)
+    message        : String,    ← Latest commit message
+
+    // Metadata
+    githubEventId  : String,    (UNIQUE) ← Prevents duplicate webhook processing
+    receivedAt     : Date,      (INDEXED)
+    createdAt      : Date
+  }
+
+  Indexes:
+    { developerId: 1 }
+    { username: 1 }
+    { githubEventId: 1 }        unique (prevent duplicate events)
+    { receivedAt: -1 }
+    { username: 1, receivedAt: -1 }  compound
+
+  TTL Index (auto-delete old events):
+    { receivedAt: 1 }, expireAfterSeconds: 7776000  (90 days)
+
+
+1.4  STATS COLLECTION
+──────────────────────
+
+  Collection name: stats
+
+  {
+    _id            : ObjectId (auto),
+    key            : String,    (UNIQUE) ← identifier for stat type
+    data           : Mixed,     ← Flexible field for stat data
+    computedAt     : Date,
+    expiresAt      : Date       ← For cache invalidation
+  }
+
+  Example documents:
+
+  {
+    key: "global",
+    data: {
+      totalDevelopers   : 14823,
+      totalCountries    : 94,
+      totalLanguages    : 68,
+      totalRepos        : 482000
+    },
+    computedAt: ISODate("2026-03-01T00:00:00Z"),
+    expiresAt : ISODate("2026-03-01T00:10:00Z")
+  }
+
+  {
+    key: "topLanguages",
+    data: [
+      { language: "JavaScript", count: 8200, percentage: 55.3 },
+      { language: "Python",     count: 6400, percentage: 43.2 }
+    ],
+    computedAt: ISODate("2026-03-01T00:00:00Z"),
+    expiresAt : ISODate("2026-03-01T00:10:00Z")
+  }
+
+  {
+    key: "topCountries",
+    data: [
+      { country: "United States", count: 3200 },
+      { country: "India",         count: 2800 }
+    ],
+    computedAt: ISODate("2026-03-01T00:00:00Z"),
+    expiresAt : ISODate("2026-03-01T00:10:00Z")
+  }
+
+
+1.5  ACTIVITY SCORE ALGORITHM
+──────────────────────────────
+
+  The activityScore (0-100) is computed as a weighted sum:
+
+  Score = (commits_30d * 0.40)
+        + (stars_received * 0.25)
+        + (repos_created * 0.15)
+        + (followers_growth * 0.10)
+        + (recency_bonus * 0.10)
+
+  Where:
+    commits_30d      = number of commits in the last 30 days (normalized 0-40)
+    stars_received   = stars received in last 30 days (normalized 0-25)
+    repos_created    = new repos in last 30 days (normalized 0-15)
+    followers_growth = new followers in last 30 days (normalized 0-10)
+    recency_bonus    = bonus based on time since last commit (0-10)
+
+  Score is recalculated:
+    - After each webhook event received
+    - During daily batch refresh job (cron job at 2am UTC)
+
+
+1.6  GEOSPATIAL QUERY EXAMPLES (MongoDB)
+─────────────────────────────────────────
+
+  Find developers within 50km of Ahmedabad:
+    db.developers.find({
+      location: {
+        $near: {
+          $geometry: {
+            type: "Point",
+            coordinates: [72.5714, 23.0225]
+          },
+          $maxDistance: 50000   // meters
+        }
+      },
+      isGeolocated: true
+    })
+
+  Find developers within a bounding box (for map viewport):
+    db.developers.find({
+      location: {
+        $geoWithin: {
+          $box: [
+            [minLng, minLat],
+            [maxLng, maxLat]
+          ]
+        }
+      }
+    })
+
+  Aggregate developers by country:
+    db.developers.aggregate([
+      { $group: { _id: "$country", count: { $sum: 1 } } },
+      { $sort: { count: -1 } },
+      { $limit: 20 }
+    ])
+
+
+================================================================================
+SECTION 2 — INFRASTRUCTURE & DEPLOYMENT
+================================================================================
+
+2.1  ENVIRONMENT ARCHITECTURE
+──────────────────────────────
+
+  Environments:
+    local       → developer machines, MongoDB local or Atlas free tier
+    staging     → Render/Vercel preview deployments
+    production  → Render (backend) + Vercel (frontend) + Atlas M10+
+
+  ┌────────────────────────────────────────────────────────────────┐
+  │                       PRODUCTION                               │
+  │                                                                │
+  │  ┌──────────────────┐        ┌──────────────────────────────┐  │
+  │  │   Vercel         │        │   Render / Railway           │  │
+  │  │   (Frontend)     │──────▶ │   (Backend API)              │  │
+  │  │   Next.js        │  HTTPS │   Node.js + Express          │  │
+  │  │   Edge Network   │        │   Docker container           │  │
+  │  └──────────────────┘        └──────────────┬───────────────┘  │
+  │                                             │                  │
+  │  ┌──────────────────┐        ┌──────────────▼───────────────┐  │
+  │  │  MongoDB Atlas   │        │   Redis Cloud                │  │
+  │  │  M10+ cluster    │◀───────│   (Caching Layer)            │  │
+  │  │  3 replicas      │        └──────────────────────────────┘  │
+  │  └──────────────────┘                                          │
+  │                                                                │
+  │  ┌──────────────────┐        ┌──────────────────────────────┐  │
+  │  │  Cloudflare      │        │   Sentry                     │  │
+  │  │  (DNS + CDN)     │        │   (Error Monitoring)         │  │
+  │  └──────────────────┘        └──────────────────────────────┘  │
+  └────────────────────────────────────────────────────────────────┘
+
+
+2.2  ENVIRONMENT VARIABLES
+────────────────────────────
+
+  Backend (.env):
+    NODE_ENV=production
+    PORT=5000
+
+    # MongoDB
+    MONGODB_URI=mongodb+srv://...
+
+    # Redis
+    REDIS_URL=redis://...
+
+    # GitHub OAuth
+    GITHUB_CLIENT_ID=...
+    GITHUB_CLIENT_SECRET=...
+    GITHUB_CALLBACK_URL=https://api.devatlas.dev/auth/github/callback
+    GITHUB_WEBHOOK_SECRET=...
+
+    # JWT
+    JWT_SECRET=...
+    JWT_EXPIRES_IN=7d
+
+    # Geocoding
+    MAPBOX_TOKEN=...
+    OPENCAGE_API_KEY=...       (optional fallback)
+
+    # CORS
+    FRONTEND_URL=https://devatlas.dev
+
+    # Sentry
+    SENTRY_DSN=...
+
+  Frontend (.env.local):
+    NEXT_PUBLIC_API_URL=https://api.devatlas.dev
+    NEXT_PUBLIC_MAPBOX_TOKEN=...
+    NEXT_PUBLIC_SITE_URL=https://devatlas.dev
+
+
+2.3  CI/CD PIPELINE (GitHub Actions)
+──────────────────────────────────────
+
+  File: .github/workflows/backend.yml
+
+    Trigger: push to main branch (backend/ directory changes)
+    Steps:
+      1. Checkout code
+      2. Set up Node.js 20
+      3. Install dependencies (npm ci)
+      4. Run linter (eslint)
+      5. Run tests (jest --coverage)
+      6. Build Docker image
+      7. Push to Docker Hub / Render Registry
+      8. Trigger Render deploy hook
+
+  File: .github/workflows/frontend.yml
+
+    Trigger: push to main branch (frontend/ directory changes)
+    Steps:
+      1. Checkout code
+      2. Set up Node.js 20
+      3. Install dependencies (npm ci)
+      4. Run linter + type check (tsc --noEmit)
+      5. Run tests (jest)
+      6. Vercel automatically deploys from GitHub (zero-config)
+
+
+2.4  DOCKER CONFIGURATION (Backend)
+─────────────────────────────────────
+
+  Dockerfile:
+
+    FROM node:20-alpine
+    WORKDIR /app
+    COPY package*.json ./
+    RUN npm ci --only=production
+    COPY src/ ./src/
+    COPY server.js ./
+    EXPOSE 5000
+    USER node
+    CMD ["node", "server.js"]
+
+  .dockerignore:
+    node_modules/
+    .env
+    tests/
+    *.md
+
+
+2.5  DEPLOYMENT STEPS
+──────────────────────
+
+  Backend (Render):
+    1. Connect GitHub repo to Render
+    2. Set build command: npm ci
+    3. Set start command: node server.js
+    4. Add all environment variables in Render dashboard
+    5. Enable auto-deploy on push to main
+
+  Frontend (Vercel):
+    1. Connect GitHub repo to Vercel
+    2. Set root directory to frontend/
+    3. Framework preset: Next.js
+    4. Add environment variables in Vercel dashboard
+    5. Configure custom domain devatlas.dev
+
+  MongoDB Atlas:
+    1. Create M10 cluster (production) or M0 (dev/staging)
+    2. Whitelist backend server IP (or use 0.0.0.0/0 with auth)
+    3. Create database user with readWrite role
+    4. Enable backup (daily snapshots)
+    5. Enable Atlas Search for text queries (optional)
+
+  Custom Domain (Cloudflare):
+    1. Add domain to Cloudflare
+    2. Point A record to Vercel IP for frontend
+    3. Point CNAME api.devatlas.dev to Render hostname
+    4. Enable Cloudflare proxy (orange cloud) for CDN + DDoS protection
+
+
+================================================================================
+SECTION 3 — SECURITY BEST PRACTICES
+================================================================================
+
+3.1  AUTHENTICATION SECURITY
+──────────────────────────────
+
+  JWT Configuration:
+    - Short expiry (7 days) with refresh token rotation
+    - Stored in HTTP-only, Secure, SameSite=Strict cookies
+    - NEVER stored in localStorage or sessionStorage
+    - Secret must be ≥ 256 bits (random string)
+
+  GitHub OAuth:
+    - state parameter with CSRF token to prevent CSRF attacks
+    - Validate state matches session before accepting callback
+    - Revoke application access on logout (optional)
+
+  Access Tokens:
+    - GitHub access tokens encrypted at rest (AES-256)
+    - Encryption key stored in env variable (not in DB)
+    - Tokens never returned in API responses
+
+
+3.2  API SECURITY
+──────────────────
+
+  HTTP Headers (Helmet.js):
+    - Content-Security-Policy
+    - Strict-Transport-Security (HSTS)
+    - X-Frame-Options: DENY
+    - X-Content-Type-Options: nosniff
+    - Referrer-Policy: no-referrer
+
+  CORS:
+    - Allow only specific origins (FRONTEND_URL env var)
+    - Allow only required methods (GET, POST)
+    - Allow credentials: true (for cookies)
+
+  Rate Limiting:
+    - express-rate-limit backed by Redis
+    - Different limits per endpoint category
+    - Block IP after excessive failed auth attempts (10 in 5 min)
+
+  Input Validation:
+    - All request bodies validated with Zod schemas
+    - Path parameters sanitized (no special chars in username)
+    - Query parameters type-checked and bounded (e.g. limit max 200)
+
+  Webhook Verification:
+    - X-Hub-Signature-256 header verified on every webhook request
+    - Use crypto.timingSafeEqual to prevent timing attacks
+    - Reject unknown sender usernames
+
+
+3.3  DATABASE SECURITY
+────────────────────────
+  - MongoDB Atlas IP whitelist (backend server IP only)
+  - Separate DB users per environment (dev/staging/prod)
+  - Least privilege: API user has readWrite on DB only
+  - No sensitive fields returned in API responses
+  - GitHub access tokens encrypted before storage
+
+
+3.4  INFRASTRUCTURE SECURITY
+──────────────────────────────
+  - All traffic over HTTPS (TLS 1.2+ enforced)
+  - Cloudflare proxy hides origin server IP
+  - Environment variables never committed to Git
+  - Dependency audit on every CI run (npm audit)
+  - Regular dependency updates (Dependabot)
+
+
+================================================================================
+SECTION 4 — PERFORMANCE OPTIMIZATION
+================================================================================
+
+4.1  BACKEND PERFORMANCE
+──────────────────────────
+
+  Caching Strategy (Redis):
+    - Cache all GitHub API responses (TTL varies by endpoint)
+    - Cache /api/developers response per filter combination
+    - Cache geospatial nearby results per lat/lng/radius
+    - Cache platform stats with 10-minute TTL
+    - Use cache-aside pattern: check Redis first, miss → hit DB → cache result
+
+  MongoDB Query Optimization:
+    - Use projection to return only needed fields (never return accessToken)
+    - 2dsphere index enables O(log n) geospatial queries
+    - Compound indexes for common query combinations
+    - Paginate all list endpoints (cursor or offset)
+    - Avoid N+1 queries; use aggregation pipeline where possible
+
+  GitHub API Optimization:
+    - Store fetched data in MongoDB (avoid repeated API calls)
+    - Batch refresh profiles during off-peak hours (cron job)
+    - GraphQL API for fetching only required fields
+    - Respect GitHub rate limits (check X-RateLimit-Remaining header)
+
+
+4.2  FRONTEND PERFORMANCE
+───────────────────────────
+
+  Next.js Optimizations:
+    - Server-side rendering for profile pages (good for SEO)
+    - Static generation for landing and stats pages
+    - Incremental Static Regeneration (ISR) for trending page (revalidate: 60)
+    - next/image for automatic image optimization and WebP conversion
+    - Dynamic imports for Mapbox (lazy load on /map page only)
+
+  Map Performance:
+    - Use bounding box queries to fetch only visible map area
+    - Supercluster.js for client-side marker clustering (avoids rendering 10K+ markers)
+    - Debounce map movement events (300ms delay before fetching)
+    - Use Mapbox vector tiles for the base map (extremely fast)
+    - Limit markers per viewport to 200 max
+
+  State Management:
+    - TanStack Query for server state (auto caching, background refresh)
+    - staleTime: 60000 (60s) for developer lists
+    - Infinite scroll for developer lists (avoid loading all at once)
+
+  Bundle Optimization:
+    - Tree-shake ShadCN imports
+    - Analyze bundle with @next/bundle-analyzer
+    - CDN for Mapbox CSS/JS (from Mapbox CDN, not bundled)
+
+
+================================================================================
+SECTION 5 — SCALING STRATEGY
+================================================================================
+
+5.1  HORIZONTAL SCALING
+────────────────────────
+
+  Backend:
+    - Containerize with Docker
+    - Deploy behind Render's autoscaling or use Kubernetes (EKS/GKE)
+    - Stateless API design allows multiple instances
+    - JWT stored in cookie (not server memory) = no sticky sessions needed
+    - Redis handles shared cache across all instances
+
+  Frontend:
+    - Vercel's edge network automatically distributes globally
+    - No additional scaling needed for static/SSR pages
+
+  Database:
+    - MongoDB Atlas supports horizontal scaling via sharding
+    - Shard key: location.coordinates (geographic distribution)
+    - Atlas auto-scales storage and compute
+
+
+5.2  VERTICAL SCALING (Atlas Tiers)
+─────────────────────────────────────
+  M0     → Dev/testing (free, 512MB)
+  M10    → Early production (10 GB, 2 vCPU)
+  M30    → Growth stage (40 GB, 4 vCPU, replica set)
+  M50+   → Scale stage (160 GB, 8 vCPU, multi-region)
+
+
+5.3  CACHING LAYERS
+────────────────────
+
+  Layer 1: Browser cache
+    - Cache-Control headers for static assets (1 year)
+    - Service Worker for offline map tiles (PWA)
+
+  Layer 2: CDN (Cloudflare)
+    - Cache public API responses at edge (e.g. /api/stats)
+    - Purge on data update
+
+  Layer 3: Redis (Application cache)
+    - Cache expensive MongoDB queries
+    - Cache GitHub API responses
+
+  Layer 4: MongoDB indexes
+    - Geospatial + compound indexes for O(log n) queries
+
+
+5.4  BACKGROUND JOBS (Cron)
+────────────────────────────
+
+  Using node-cron or Render Cron Jobs:
+
+  Every 6 hours:
+    - Refresh top 100 most active developers' GitHub data
+    - Recalculate activity scores for recently active developers
+
+  Every 10 minutes:
+    - Recompute /api/stats/global and store in stats collection
+
+  Daily at 2am UTC:
+    - Full refresh of all developers' follower/repo counts
+    - Rebuild language aggregation stats
+    - Archive activity events older than 90 days
+
+
+5.5  LOAD TESTING BENCHMARKS (Targets)
+────────────────────────────────────────
+  Load test with k6 or Artillery:
+
+  Target thresholds:
+    GET /api/developers    → p95 < 200ms at 500 concurrent users
+    GET /api/developers/u  → p95 < 300ms at 200 concurrent users
+    GET /api/developers/nearby → p95 < 400ms at 100 concurrent users
+
+  Run load test before every major release.
+
+
+================================================================================
+SECTION 6 — FUTURE FEATURE EXPANSION
+================================================================================
+
+6.1  PHASE 2 FEATURES
+──────────────────────
+
+  Developer Connections:
+    - Follow other developers on DevAtlas
+    - "Following" feed showing recent activity
+    - Connection suggestions based on shared languages
+
+  Messaging (Basic):
+    - Direct message between developers
+    - Message thread stored in MongoDB
+    - Real-time via Socket.IO
+
+  Developer Portfolios:
+    - Custom bio section (Markdown support)
+    - Portfolio links, resume PDF upload
+    - Featured projects showcase
+
+  Teams & Organizations:
+    - GitHub Organizations mapped on the globe
+    - Team members visualized as grouped markers
+
+  AI Features:
+    - "Find developers most similar to me" (embedding-based search)
+    - Smart skill matching using language overlap
+    - Gemini / GPT API for generating developer summaries
+
+
+6.2  PHASE 3 FEATURES
+──────────────────────
+
+  Open Source Project Discovery:
+    - Map open source projects by maintainer location
+    - "Contribute near me" feature
+
+  Developer Events Map:
+    - Community events (hackathons, meetups) on the map
+    - Event RSVP system
+
+  Gamification:
+    - Contribution badges
+    - Streak tracking
+    - Monthly leaderboard by country
+
+  Mobile App:
+    - React Native app using Mapbox SDK
+    - Push notifications for nearby developer activity
+
+
+================================================================================
+SECTION 7 — MONITORING & OBSERVABILITY
+================================================================================
+
+7.1  ERROR MONITORING
+──────────────────────
+  Tool: Sentry
+  - Install @sentry/node in backend
+  - Install @sentry/nextjs in frontend
+  - Capture all unhandled exceptions
+  - Set up Slack/email alerts for P0 errors
+
+7.2  LOGGING
+──────────────
+  Backend:
+    - Morgan for HTTP request logs (combined format)
+    - Winston for application logs (structured JSON)
+    - Log levels: error, warn, info, debug
+    - Ship logs to Papertrail or Logtail
+
+7.3  PERFORMANCE MONITORING
+────────────────────────────
+  - Vercel Analytics (frontend Web Vitals)
+  - Render metrics dashboard (CPU, memory, response time)
+  - MongoDB Atlas Performance Advisor (slow query detection)
+  - Custom /health endpoint for uptime monitors (UptimeRobot)
+
+7.4  HEALTH CHECK ENDPOINT
+────────────────────────────
+  GET /health
+  Response:
+  {
+    "status": "ok",
+    "uptime": 3600,
+    "database": "connected",
+    "redis": "connected",
+    "timestamp": "2026-03-04T12:00:00Z"
+  }
+
+
+================================================================================
+                           END OF FILE 2
+================================================================================
