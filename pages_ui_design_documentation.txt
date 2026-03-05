@@ -1,0 +1,737 @@
+================================================================================
+              DEVATLAS — PAGES & UI DESIGN DOCUMENTATION
+         All Pages · Layouts · Sections · Component Breakdown
+================================================================================
+
+Author  : Senior Full-Stack Architect / UI Designer
+Project : DevAtlas
+Stack   : Next.js 14 App Router · Tailwind CSS · ShadCN UI · Mapbox GL JS
+Date    : March 2026
+
+
+================================================================================
+OVERVIEW — ALL PAGES IN DEVATLAS
+================================================================================
+
+  DevAtlas has 8 main pages:
+
+  Route                        Page Name                Auth Required?
+  ─────────────────────────────────────────────────────────────────────
+  /                            Landing Page             No
+  /map                         Global Developer Map     No (view only)
+  /developer/[username]        Developer Profile        No
+  /nearby                      Nearby Developers        Yes (needs location)
+  /trending                    Trending Developers      No
+  /stats                       Global Statistics        No
+  /onboarding                  Setup After Login        Yes
+  /settings                    User Settings            Yes
+  ─────────────────────────────────────────────────────────────────────
+
+  Plus:
+  /auth/callback               OAuth callback (internal redirect, no UI)
+
+
+================================================================================
+GLOBAL DESIGN SYSTEM
+================================================================================
+
+  Color Palette (Dark-first theme):
+  ────────────────────────────────────
+    Background Primary   : #0D1117   (GitHub-dark inspired)
+    Background Secondary : #161B22
+    Background Card      : #1C2128
+    Border               : #30363D
+    Accent Primary       : #2563EB   (Electric Blue)
+    Accent Secondary     : #8B5CF6   (Purple)
+    Accent Glow          : #22D3EE   (Cyan, for map markers)
+    Text Primary         : #F0F6FC
+    Text Secondary       : #8B949E
+    Text Muted           : #484F58
+    Success              : #3FB950
+    Warning              : #D29922
+    Error                : #F85149
+
+  Typography:
+  ────────────────────────────────────
+    Font Family   : "Inter" (Google Fonts) for all UI
+    Map Labels    : "Geist Mono" (monospace) for coordinate displays
+    Headings      : font-weight 700 (Bold)
+    Body          : font-weight 400 (Regular)
+    Code/Labels   : font-weight 500 (Medium)
+
+  Spacing System:
+  ────────────────────────────────────
+    Uses Tailwind's default spacing scale (4px base unit).
+    Standard section padding : py-20 px-6 (desktop) / py-12 px-4 (mobile)
+
+  Border Radius:
+  ────────────────────────────────────
+    Cards       : rounded-xl (12px)
+    Buttons     : rounded-lg (8px)
+    Badges      : rounded-full
+    Inputs      : rounded-md (6px)
+
+  Effects:
+  ────────────────────────────────────
+    Card hover  : translate-y(-2px) + shadow-lg
+    Glassmorphism: bg-white/5 backdrop-blur-md border border-white/10
+    Glow effect : box-shadow: 0 0 20px rgba(37, 99, 235, 0.3)
+    Gradient text: bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-400
+
+  Navbar (Persistent across ALL pages):
+  ────────────────────────────────────
+    ┌────────────────────────────────────────────────────────────────────┐
+    │  🌐 DevAtlas        Map   Trending   Stats   Nearby    [Sign In]  │
+    └────────────────────────────────────────────────────────────────────┘
+
+    Left    : Logo (globe icon + "DevAtlas" wordmark, links to /)
+    Center  : Navigation links (Map, Trending, Stats, Nearby)
+    Right   : Sign in button (GitHub icon) OR user avatar dropdown
+    Style   : bg-[#0D1117]/80 backdrop-blur-md, sticky top-0, border-b border-[#30363D]
+    Mobile  : Hamburger menu → full-screen slide-in drawer
+
+
+================================================================================
+PAGE 1 — LANDING PAGE  ( / )
+================================================================================
+
+  Purpose : First impression. Converts visitors to sign-ups.
+            Explains what DevAtlas is and shows a preview of the map.
+  Auth    : Public (no login required)
+  Route   : /
+
+
+  LAYOUT WIREFRAME
+  ─────────────────
+  ┌─────────────────────────────────────────────────────────┐
+  │                      NAVBAR                             │
+  ├─────────────────────────────────────────────────────────┤
+  │                                                         │
+  │                    HERO SECTION                         │
+  │   "Map the World's Developer Community"                 │
+  │   [Subheading] [Sign in with GitHub] [Explore Map]      │
+  │   [Animated globe / map preview in background]          │
+  │                                                         │
+  ├─────────────────────────────────────────────────────────┤
+  │                  STATS BAR                              │
+  │   14,823 Developers  |  94 Countries  |  68 Languages   │
+  ├─────────────────────────────────────────────────────────┤
+  │                  FEATURES SECTION                       │
+  │   [Feature 1]   [Feature 2]   [Feature 3]               │
+  ├─────────────────────────────────────────────────────────┤
+  │                  HOW IT WORKS                           │
+  │   Step 1 → Step 2 → Step 3 → Step 4                     │
+  ├─────────────────────────────────────────────────────────┤
+  │               DEVELOPER SHOWCASE                        │
+  │    Scrolling row of developer avatar cards              │
+  ├─────────────────────────────────────────────────────────┤
+  │                    MAP PREVIEW                          │
+  │    Static/animated snapshot of the global map           │
+  ├─────────────────────────────────────────────────────────┤
+  │                      CTA SECTION                        │
+  │   "Join DevAtlas today" — [Sign in with GitHub]         │
+  ├─────────────────────────────────────────────────────────┤
+  │                      FOOTER                             │
+  └─────────────────────────────────────────────────────────┘
+
+
+  SECTIONS IN DETAIL
+  ───────────────────
+
+  [A] HERO SECTION
+    Background : Animated starfield or subtle particle canvas
+                 + globe SVG slowly rotating on the right side
+    Headline   : "Map the World's Developer Community"
+                 (large gradient text, ~72px, bold)
+    Subheading : "Discover developers near you, explore GitHub activity
+                  around the globe, and build connections that matter."
+                 (muted text, ~20px)
+    CTA Buttons:
+      Primary   : "Sign in with GitHub"  (GitHub Octocat icon + solid blue)
+      Secondary : "Explore the Map"      (ghost/outline button)
+    Floating stats chips (small badges):
+      "14K+ Developers"  "94 Countries"  "Live GitHub Activity"
+    Animation  : Markers randomly pulse on the globe background
+
+  [B] LIVE STATS BAR (scrolling ticker)
+    Full-width dark bar with 3 animated counters:
+      🌍 14,823 Developers Mapped
+      🗺️ 94 Countries Represented
+      💻 68 Programming Languages
+
+  [C] FEATURES SECTION
+    Section title: "Everything you need to explore"
+    3-column grid of feature cards:
+
+    Card 1 — 🗺️ Interactive World Map
+      "Explore a real-time interactive globe showing developers in
+       every country. Zoom, pan, and click any marker."
+
+    Card 2 — 🔍 Discover by Language
+      "Filter developers by programming language, country, or
+       follower count. Find JavaScript devs in Berlin or Rustaceans
+       in Tokyo."
+
+    Card 3 — ⚡ Live GitHub Activity
+      "GitHub webhooks update developer markers in real-time.
+       Watch commits, new repos, and stars as they happen."
+
+    Card 4 — 📍 Nearby Developers
+      "Find developers in your city or within a custom radius.
+       Connect with your local open-source community."
+
+    Card 5 — 📊 Global Dev Statistics
+      "Explore analytics on top programming languages, most active
+       countries, and global contribution trends."
+
+    Card 6 — 🏆 Trending Developers
+      "See who's climbing the leaderboard based on real GitHub
+       commit and star activity."
+
+  [D] HOW IT WORKS (numbered steps)
+    Horizontal stepper with icons:
+    Step 1:  Sign in with GitHub (GitHub icon)
+    Step 2:  We fetch your public profile (API icon)
+    Step 3:  Your location is mapped (pin icon)
+    Step 4:  You appear on the global map (globe icon)
+
+  [E] DEVELOPER SHOWCASE
+    "Meet some of our developers" heading
+    Auto-scrolling horizontal row of developer mini-cards:
+    Each card: avatar + username + top language badge + country flag
+
+  [F] MAP PREVIEW
+    Full-width dark section with a screenshot/embed of the map
+    Gradient overlay fading at the bottom
+    "Start exploring →" button
+
+  [G] CTA SECTION
+    Dark gradient background (blue to purple)
+    Large heading: "Join 14,000+ developers on the map"
+    Single button: "Sign in with GitHub" (large, full-width on mobile)
+
+  [H] FOOTER
+    Left  : Logo + tagline
+    Links : Map · Trending · Stats · Nearby · GitHub (repo link)
+    Right : "Built with GitHub OAuth · OpenCage · Mapbox"
+    Bottom: copyright
+
+
+================================================================================
+PAGE 2 — GLOBAL DEVELOPER MAP  ( /map )
+================================================================================
+
+  Purpose : Core feature. Interactive world map of all developers.
+  Auth    : Public (login required to appear on map)
+  Route   : /map
+
+
+  LAYOUT WIREFRAME
+  ─────────────────
+  ┌────────────────────────────────────────────────────────────────────────┐
+  │                            NAVBAR                                      │
+  ├──────────────┬─────────────────────────────────────────────────────────┤
+  │              │                                                         │
+  │  FILTER      │                                                         │
+  │  SIDEBAR     │               MAPBOX GL JS MAP                         │
+  │              │             (full screen, dark theme)                   │
+  │  Language ▾  │                                                         │
+  │  Country  ▾  │      [ Developer Markers / Clusters ]                  │
+  │  Followers ▾ │                                                         │
+  │  [Apply]     │                                                         │
+  │              │                                                         │
+  │  [Reset]     │                     [+] [-] [⊕] Controls              │
+  │              │                                                         │
+  └──────────────┴─────────────────────────────────────────────────────────┘
+                    ↑ When marker is clicked → popup appears on map
+
+
+  SECTIONS IN DETAIL
+  ───────────────────
+
+  [A] MAP AREA (full remaining screen height after navbar)
+    Library     : Mapbox GL JS
+    Map Style   : mapbox://styles/mapbox/dark-v11 (dark theme)
+    Initial View: Globe projection, zoom level 2, centered on [0, 20]
+    Marker Style: Small circular avatar images (32x32px)
+                  Outlined with a soft blue glow ring
+                  Clustered into numbered circles at low zoom
+    Cluster Style: Circle with count in center, color varies by size:
+                   0-10 devs: cyan, 10-50: blue, 50+: purple
+
+  [B] DEVELOPER POPUP (appears on marker click)
+    Style: Glassmorphism card (bg white/5, blur, border)
+    Contents:
+      ┌─────────────────────────────────┐
+      │  [AVATAR 48px]  @username        │
+      │                 Full Name        │
+      │                 📍 Bangalore, IN │
+      ├─────────────────────────────────┤
+      │  ⭐ 1,240 followers              │
+      │  📦 87 repos                     │
+      │  Languages: [JS] [TS] [Python]   │
+      ├─────────────────────────────────┤
+      │  [View Profile] [GitHub ↗]       │
+      └─────────────────────────────────┘
+
+  [C] FILTER SIDEBAR (left panel, collapsible on mobile)
+    Width    : 280px on desktop, full-width drawer on mobile
+    Filters  :
+      - Language multi-select (checkbox list with icons)
+      - Country dropdown search
+      - Min followers slider (0 to 10000)
+      - Sort by (Most Followers | Most Active | Newest)
+    Buttons  : [Apply Filters] [Reset All]
+    Counter  : "Showing 342 developers" (updates dynamically)
+
+  [D] MAP CONTROLS (bottom right)
+    + / -         Zoom in/out
+    ⊕ (crosshair) Locate me (uses browser Geolocation API)
+    ⊞ (expand)   Fullscreen toggle
+
+  [E] TOP MINI STAT BAR (above map, below navbar)
+    Thin bar showing: "🌍 14,823 developers · 94 countries · Filter active: JavaScript"
+
+
+================================================================================
+PAGE 3 — DEVELOPER PROFILE  ( /developer/[username] )
+================================================================================
+
+  Purpose : Detailed GitHub profile page for each developer.
+  Auth    : Public
+  Route   : /developer/john-doe
+
+
+  LAYOUT WIREFRAME
+  ─────────────────
+  ┌─────────────────────────────────────────────────────────┐
+  │                        NAVBAR                           │
+  ├─────────────────────────────────────────────────────────┤
+  │                   PROFILE HERO                          │
+  │  [Avatar]  Name  @username  Location  Bio  [GitHub ↗]   │
+  │  Followers: 1240  Repos: 87  Following: 210             │
+  ├──────────────────────────┬──────────────────────────────┤
+  │                          │                              │
+  │   LANGUAGE BREAKDOWN     │   PINNED REPOSITORIES        │
+  │   (Donut / Bar Chart)    │   (2-col grid of repo cards) │
+  │                          │                              │
+  ├──────────────────────────┴──────────────────────────────┤
+  │              CONTRIBUTION HEATMAP                       │
+  │              (GitHub-style 52-week grid)                │
+  ├─────────────────────────────────────────────────────────┤
+  │              ALL REPOSITORIES                           │
+  │              (searchable sortable list)                 │
+  ├─────────────────────────────────────────────────────────┤
+  │              NEARBY DEVELOPERS                          │
+  │              (horizontal scroll of cards)               │
+  └─────────────────────────────────────────────────────────┘
+
+
+  SECTIONS IN DETAIL
+  ───────────────────
+
+  [A] PROFILE HERO (full-width dark card)
+    Left  : Avatar (96px circle, border glow)
+    Right content:
+      - Full Name (24px bold) + @username (14px muted, linked to GitHub)
+      - Bio text (max 2 lines)
+      - 📍 Location / 🏢 Company / 🔗 Blog (inline chips)
+      - Language badges: [JavaScript] [TypeScript] [Python]
+    Stats row:
+      [ 1,240 Followers ]  [ 210 Following ]  [ 87 Repos ]
+    Action buttons:
+      [View on GitHub ↗]  [Copy Profile Link]
+
+  [B] LANGUAGE BREAKDOWN (left card)
+    Donut chart (Recharts) showing language percentages
+    Legend below with language name + bytes count
+    Color-coded per language (GitHub's official language colors)
+
+  [C] PINNED REPOSITORIES (right card, 2-col grid)
+    Each repo card:
+      - Repo name (bold, linked)
+      - Description (2-line truncate)
+      - Language dot + name
+      - ⭐ Stars count  🍴 Forks count
+      - Topic badges (e.g. [web] [api] [react])
+
+  [D] CONTRIBUTION HEATMAP
+    52-week × 7-day green grid (GitHub-style)
+    Tooltip on hover: "12 contributions on March 4, 2026"
+    Color intensity: 0=dark, 1-3=light green, 4-9=medium, 10+=bright green
+    Powered by GitHub GraphQL contributionsCollection data
+
+  [E] ALL REPOSITORIES (searchable)
+    Search input at top
+    Sort: [Stars ▾] [Forks ▾] [Updated ▾]
+    Each repo row:
+      Name | Description | Language | ⭐ Stars | 🍴 Forks | Updated ago
+    Load more button (pagination)
+
+  [F] NEARBY DEVELOPERS
+    Heading: "Developers near [Location]"
+    Horizontal scroll row of small developer cards
+    Each card: avatar + username + distance (km) + top language
+
+
+================================================================================
+PAGE 4 — NEARBY DEVELOPERS  ( /nearby )
+================================================================================
+
+  Purpose : Discover developers geographically near the logged-in user.
+  Auth    : Yes (needs location from profile)
+  Route   : /nearby
+
+
+  LAYOUT WIREFRAME
+  ─────────────────
+  ┌─────────────────────────────────────────────────────────┐
+  │                        NAVBAR                           │
+  ├─────────────────────────────────────────────────────────┤
+  │   PAGE HEADER                                           │
+  │   "Developers Near You"  📍 Ahmedabad, India            │
+  │   Radius slider: [10km ─────●──── 500km]                │
+  ├─────────────────────────────────────────────────────────┤
+  │                                                         │
+  │   MINI MAP (300px tall)   +   RESULTS LIST (right)      │
+  │   showing nearby pins         scrollable cards          │
+  │                                                         │
+  ├─────────────────────────────────────────────────────────┤
+  │   RESULTS GRID (responsive card grid)                   │
+  │   [Card] [Card] [Card]                                  │
+  │   [Card] [Card] [Card]                                  │
+  └─────────────────────────────────────────────────────────┘
+
+
+  SECTIONS IN DETAIL
+  ───────────────────
+
+  [A] PAGE HEADER
+    Title: "Developers Near You" with location chip: "📍 Ahmedabad, India"
+    If no location: warning banner "Your GitHub profile has no location set.
+    Please update it on GitHub or set it manually."
+    Manual location input: text field with autocomplete
+
+  [B] RADIUS CONTROL
+    Slider: 10km to 500km
+    Live label: "Showing developers within 50 km"
+    Triggers new API call on change (debounced 500ms)
+
+  [C] SPLIT VIEW
+    Left: Mini Mapbox map (non-fullscreen), centered on user's location
+          Nearby developers shown as small avatar markers
+          User's own position shown as a pulsing blue dot
+    Right: Scrollable list of developer mini-cards (same as popup card)
+
+  [D] RESULTS GRID
+    3-column responsive grid of developer cards:
+    Each card:
+      ┌───────────────────────────┐
+      │ [Avatar]  @username       │
+      │           Full Name       │
+      │  📍 Surat, India          │
+      │  ↔ 265 km away            │
+      │  [JS] [TS] [Go]           │
+      │  ⭐ 450 followers          │
+      │  [View Profile]           │
+      └───────────────────────────┘
+
+
+================================================================================
+PAGE 5 — TRENDING DEVELOPERS  ( /trending )
+================================================================================
+
+  Purpose : Leaderboard of most active GitHub developers on the platform.
+  Auth    : Public
+  Route   : /trending
+
+
+  LAYOUT WIREFRAME
+  ─────────────────
+  ┌─────────────────────────────────────────────────────────┐
+  │                        NAVBAR                           │
+  ├─────────────────────────────────────────────────────────┤
+  │   PAGE HEADER + PERIOD FILTER                           │
+  │   "Trending Developers"   [Today ▾] [Week] [Month]      │
+  │   [All Languages ▾]   [All Countries ▾]                 │
+  ├─────────────────────────────────────────────────────────┤
+  │  TOP 3 PODIUM (animated, big cards)                     │
+  │    #2        #1 (center, bigger)     #3                  │
+  ├─────────────────────────────────────────────────────────┤
+  │  RANKED LIST (rank #4 to #50)                           │
+  │  Rank | Avatar | Username | Score | Score Change | Lang │
+  └─────────────────────────────────────────────────────────┘
+
+
+  SECTIONS IN DETAIL
+  ───────────────────
+
+  [A] PAGE HEADER
+    Title: "🔥 Trending Developers"
+    Tab filter: Today | This Week | This Month
+    Dropdown filters: Language, Country
+
+  [B] TOP 3 PODIUM
+    3 large cards side by side with rank numbers (#1 center, raised)
+    Each card:
+      - Large avatar (80px)
+      - #1 badge (gold crown SVG)
+      - @username
+      - Activity score: 98.4
+      - Score change: +12.4 ↑ (green)
+      - Top 3 language badges
+      - "View Profile" button
+    Animation: cards slide up on page load
+
+  [C] RANKED LIST (table style)
+    Columns:
+      Rank | Developer | Activity Score | Change | Top Languages | Repos
+    Rank column: #4, #5... with animated bar in background
+    Score change color: green (↑) or red (↓)
+    Row hover: slight background highlight
+    Load more button at bottom (or infinite scroll)
+
+
+================================================================================
+PAGE 6 — GLOBAL STATISTICS  ( /stats )
+================================================================================
+
+  Purpose : Platform-wide analytics dashboard.
+  Auth    : Public
+  Route   : /stats
+
+
+  LAYOUT WIREFRAME
+  ─────────────────
+  ┌─────────────────────────────────────────────────────────┐
+  │                        NAVBAR                           │
+  ├─────────────────────────────────────────────────────────┤
+  │   PAGE HEADER                                           │
+  │   "Global Developer Statistics"                         │
+  ├─────────────────────────────────────────────────────────┤
+  │  [STAT CARD]  [STAT CARD]  [STAT CARD]  [STAT CARD]     │
+  │  Total Devs   Countries    Languages    Total Repos      │
+  ├────────────────────────────┬────────────────────────────┤
+  │  TOP LANGUAGES BAR CHART   │  TOP COUNTRIES LIST        │
+  │  (horizontal bar chart)    │  (ranked list with flags)  │
+  ├────────────────────────────┴────────────────────────────┤
+  │  WORLD HEATMAP                                          │
+  │  (Mapbox choropleth — color countries by dev density)   │
+  ├─────────────────────────────────────────────────────────┤
+  │  LIVE ACTIVITY FEED                                     │
+  │  (real-time stream of recent commits and events)        │
+  └─────────────────────────────────────────────────────────┘
+
+
+  SECTIONS IN DETAIL
+  ───────────────────
+
+  [A] STAT CARDS (4-column row)
+    Each card: icon + animated count-up number + label
+    Card 1: 🌍 14,823 — Total Developers
+    Card 2: 🗺️ 94 — Countries Represented
+    Card 3: 💻 68 — Programming Languages
+    Card 4: 📦 482K — Total Repositories
+    Style: glass card with subtle border glow
+
+  [B] TOP LANGUAGES CHART (left column)
+    Horizontal bar chart (Recharts BarChart)
+    Each bar: language color + name + count + percentage
+    Sorted by developer count (descending)
+    GitHub's official language color codes
+    Top 10 languages shown
+
+  [C] TOP COUNTRIES LIST (right column)
+    Ranked list with:
+      Flag emoji + Country name + Developer count + Percentage bar
+    Top 20 countries
+    Search/filter input at top
+
+  [D] WORLD HEATMAP
+    Full-width Mapbox map
+    Countries colored by density (light blue → deep blue → purple)
+    Hover over country → tooltip shows "India: 2,800 developers"
+    Legend: color scale from 0 to max
+
+  [E] LIVE ACTIVITY FEED
+    Real-time scrolling list (newest at top, max 20 visible):
+    Each item:
+      [Avatar] @username pushed 3 commits to project-name • 2 min ago
+      [Avatar] @username starred awesome-repo • 5 min ago
+    Auto-updates via WebSocket/SSE
+    Pause on hover
+
+
+================================================================================
+PAGE 7 — ONBOARDING  ( /onboarding )
+================================================================================
+
+  Purpose : First-time setup for new users after GitHub sign-in.
+            Shown once, then redirects to /map.
+  Auth    : Yes (only shown to new users on first login)
+  Route   : /onboarding
+
+
+  LAYOUT WIREFRAME
+  ─────────────────
+  ┌─────────────────────────────────────────────────────────────┐
+  │                   MINIMAL NAVBAR (logo only)                │
+  ├─────────────────────────────────────────────────────────────┤
+  │                                                             │
+  │              STEP PROGRESS BAR  ●──○──○                     │
+  │                                                             │
+  │           STEP 1: "Welcome, John! 👋"                       │
+  │           Your profile has been created.                    │
+  │                                                             │
+  │           STEP 2: "Your location on the map"               │
+  │           [Location preview mini-map]                       │
+  │           Not right? [Update location]                      │
+  │                                                             │
+  │           STEP 3: "You're all set!"                         │
+  │           [Go to the Map →]                                 │
+  │                                                             │
+  └─────────────────────────────────────────────────────────────┘
+
+
+  SECTIONS IN DETAIL
+  ───────────────────
+
+  [A] PROGRESS BAR
+    3-step horizontal stepper at top
+    Active step highlighted in blue
+
+  [B] STEP 1 — Welcome
+    GitHub avatar (large, 80px) + "Welcome, [Name]!"
+    Summary of fetched data:
+      ✅ GitHub username fetched
+      ✅ Profile photo loaded
+      ✅ [X] repositories found
+      ⚠️ Location: "Ahmedabad, India" (or "No location set")
+    [Continue] button
+
+  [C] STEP 2 — Location Confirmation
+    If location found: mini map showing their pin with "This is you! 📍"
+    If no location   : text input to manually enter location
+                       "Enter your city to appear on the map"
+    [Confirm Location] button
+
+  [D] STEP 3 — Ready
+    Success animation (confetti or map pulse)
+    "You're now on the DevAtlas map!"
+    "14,823 developers can now discover you."
+    [Explore the Map →] (big primary button)
+    [Skip for now] (muted text link)
+
+
+================================================================================
+PAGE 8 — SETTINGS  ( /settings )
+================================================================================
+
+  Purpose : Allow logged-in users to manage their DevAtlas profile.
+  Auth    : Yes
+  Route   : /settings
+
+
+  LAYOUT WIREFRAME
+  ─────────────────
+  ┌─────────────────────────────────────────────────────────┐
+  │                        NAVBAR                           │
+  ├────────────────┬────────────────────────────────────────┤
+  │                │                                        │
+  │  SETTINGS      │   SETTINGS PANEL CONTENT               │
+  │  SIDEBAR       │                                        │
+  │                │   [Tab-selected form content]          │
+  │  Profile       │                                        │
+  │  Location      │                                        │
+  │  Privacy       │                                        │
+  │  Notifications │                                        │
+  │  Danger Zone   │                                        │
+  │                │                                        │
+  └────────────────┴────────────────────────────────────────┘
+
+
+  SECTIONS IN DETAIL (tabs)
+  ───────────────────────────
+
+  [A] PROFILE TAB
+    Read-only GitHub data:
+      Avatar (with "synced from GitHub" label)
+      Username, Name, Bio, Company, Blog
+    [Refresh GitHub Data] button (calls POST /api/developers/refresh)
+    Note: "To edit name/bio, update your GitHub profile."
+
+  [B] LOCATION TAB
+    Current location on mini-map
+    [Location] text input with geocode preview
+    Toggle: "Show my location on map" (on/off)
+    [Save Location] button
+
+  [C] PRIVACY TAB
+    Toggle: "Show my profile on the global map" (default: on)
+    Toggle: "Allow nearby developers to find me" (default: on)
+    Toggle: "Show my repositories on my profile" (default: on)
+
+  [D] NOTIFICATIONS TAB (future feature placeholder)
+    "Email notifications coming soon"
+
+  [E] DANGER ZONE TAB
+    Red-bordered section:
+    [Delete my account from DevAtlas]
+    Confirmation modal: "This will remove you from the map. Your GitHub
+    data is not affected." → type username to confirm delete
+
+
+================================================================================
+RESPONSIVE DESIGN BREAKPOINTS
+================================================================================
+
+  Mobile    : < 640px   → single column, hamburger nav, drawer sidebars
+  Tablet    : 640-1024px → 2-column grids, collapsible sidebar
+  Desktop   : > 1024px  → full layout as shown in wireframes above
+
+  Mobile-specific:
+    - Map filters move to a bottom sheet (swipe up)
+    - Profile sections stack vertically
+    - Trending podium becomes a vertical ranked list
+    - Stats page charts become horizontally scrollable
+
+
+================================================================================
+ANIMATION & MICRO-INTERACTION GUIDELINES
+================================================================================
+
+  Page transitions : Fade-in (opacity 0→1, 200ms ease)
+  Card hover       : translateY(-2px) + shadow increase (150ms ease)
+  Counter numbers  : Count-up animation on first viewport entry
+  Marker pulse     : CSS pulse animation (ring expanding + fading)
+  Sidebar open     : Slide-in from left (300ms ease-out)
+  Popup appear     : Scale + fade (150ms ease-out)
+  Trending cards   : Slide up from bottom on load, staggered 50ms each
+  Stat cards       : Staggered fade-in when they enter viewport
+  Activity feed    : Slide-in from top for new items
+  Cluster expand   : Mapbox built-in easing
+
+
+================================================================================
+SEO & METADATA PER PAGE
+================================================================================
+
+  /                  title: "DevAtlas — Map the World's Developer Community"
+  /map               title: "Global Developer Map — DevAtlas"
+  /developer/:u      title: "@username on DevAtlas · GitHub Developer Map"
+  /trending          title: "Trending Developers — DevAtlas"
+  /stats             title: "Global Developer Statistics — DevAtlas"
+  /nearby            title: "Nearby Developers — DevAtlas"
+  /onboarding        title: "Welcome to DevAtlas"
+  /settings          title: "Settings — DevAtlas"
+
+  All pages include:
+    <meta name="description" content="..." />
+    <meta property="og:image" content="/og-image.png" />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+
+
+================================================================================
+                          END OF DOCUMENT
+================================================================================
