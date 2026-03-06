@@ -33,7 +33,9 @@ function DotGlobe() {
                 style={{ gridTemplateColumns: `repeat(${cols}, 1fr)`, gridTemplateRows: `repeat(${rows}, 1fr)` }}
             >
                 {dots.map((d, i) => {
-                    const isHighlighted = Math.random() > 0.85;
+                    // Use a deterministic pseudo-random value for consistent SSR/Client hydration
+                    const pseudoRandom = Math.abs(Math.sin(i * 123.456));
+                    const isHighlighted = pseudoRandom > 0.85;
                     return (
                         <motion.div
                             key={i}

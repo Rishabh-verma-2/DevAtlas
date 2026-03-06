@@ -2,7 +2,8 @@
 
 import { motion, useScroll, useTransform } from "framer-motion";
 import Link from "next/link";
-import { Globe, Menu, X, Github } from "lucide-react";
+import Image from "next/image";
+import { Menu, X, Github } from "lucide-react";
 import { useState, useEffect } from "react";
 
 export default function Navbar() {
@@ -23,8 +24,8 @@ export default function Navbar() {
             animate={{ y: 0, opacity: 1 }}
             transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
             className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${scrolled
-                    ? "bg-[#0D1117]/90 backdrop-blur-xl border-b border-[#30363D] shadow-[0_4px_30px_rgba(0,0,0,0.4)]"
-                    : "bg-transparent border-b border-transparent"
+                ? "bg-[#0D1117]/90 backdrop-blur-xl border-b border-[#30363D] shadow-[0_4px_30px_rgba(0,0,0,0.4)]"
+                : "bg-transparent border-b border-transparent"
                 }`}
         >
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -32,7 +33,7 @@ export default function Navbar() {
                     {/* Logo */}
                     <Link href="/" className="flex items-center gap-2.5 group">
                         <div className="relative w-8 h-8 flex items-center justify-center">
-                            <Globe className="w-7 h-7 text-blue-400 group-hover:text-blue-300 transition-colors" />
+                            <Image src="/favicon.png" alt="DevAtlas Logo" width={32} height={32} className="relative z-10 drop-shadow-[0_0_10px_rgba(96,165,250,0.5)] group-hover:scale-110 transition-transform duration-300" />
                             <motion.div
                                 animate={{ scale: [1, 1.3, 1], opacity: [0.5, 0, 0.5] }}
                                 transition={{ repeat: Infinity, duration: 2.5 }}

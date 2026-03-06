@@ -15,6 +15,9 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "DevAtlas — Map the World's Developer Community",
   description: "Discover developers near you, explore GitHub activity around the globe, and build connections that matter.",
+  icons: {
+    icon: "/favicon-dark.png",
+  },
 };
 
 export default function RootLayout({

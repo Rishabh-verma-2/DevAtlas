@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { Globe, Github } from "lucide-react";
+import Image from "next/image";
+import { Github } from "lucide-react";
 
 export default function Footer() {
     const links = {
@@ -32,8 +33,8 @@ export default function Footer() {
                 <div className="grid grid-cols-1 md:grid-cols-5 gap-12 mb-12">
                     {/* Brand column */}
                     <div className="md:col-span-2">
-                        <Link href="/" className="flex items-center gap-2 mb-5 w-fit">
-                            <Globe className="h-6 w-6 text-blue-400" />
+                        <Link href="/" className="flex items-center gap-2 mb-5 w-fit group">
+                            <Image src="/favicon.png" alt="DevAtlas Logo" width={28} height={28} className="drop-shadow-[0_0_8px_rgba(96,165,250,0.5)] group-hover:scale-110 transition-transform duration-300" />
                             <span className="text-lg font-black bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-400">
                                 DevAtlas
                             </span>
