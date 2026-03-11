@@ -52,7 +52,7 @@ const stats = [
 
 export default function LiveStatsBar() {
     return (
-        <section className="relative border-y border-[#30363D] bg-[#161B22] overflow-hidden py-16">
+        <section className="relative border-y border-[#30363D] bg-[#161B22] overflow-hidden py-4">
             <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-blue-500/40 to-transparent" />
             <div className="absolute bottom-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-purple-500/40 to-transparent" />
 

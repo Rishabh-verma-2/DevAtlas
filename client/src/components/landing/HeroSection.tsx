@@ -240,7 +240,7 @@ export default function HeroSection() {
                 </motion.div>
 
                 {/* Stats row */}
-                <motion.div
+                {/* <motion.div
                     initial={{ opacity: 0, y: 28 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.8, delay: 1.5 }}
@@ -259,10 +259,10 @@ export default function HeroSection() {
                             <div className="text-[11px] text-[#8B949E] mt-1">{label}</div>
                         </div>
                     ))}
-                </motion.div>
+                </motion.div> */}
 
                 {/* Scroll indicator */}
-                <motion.div
+                {/* <motion.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={{ delay: 2.2 }}
@@ -278,7 +278,7 @@ export default function HeroSection() {
                             <div className="w-1 h-2 rounded-full bg-white/30" />
                         </motion.div>
                     </div>
-                </motion.div>
+                </motion.div> */}
             </div>
         </section>
     );

@@ -69,6 +69,14 @@ export default function Navbar() {
                             <Github className="h-4 w-4" />
                             Sign in
                         </motion.button>
+                        <motion.button
+                            whileHover={{ scale: 1.04 }}
+                            whileTap={{ scale: 0.97 }}
+                            className="flex items-center gap-2 bg-[#2563EB] hover:bg-blue-500 text-white px-5 py-2 rounded-lg text-sm font-semibold transition-colors shadow-[0_0_20px_rgba(37,99,235,0.4)]"
+                        >
+                            <Github className="h-4 w-4" />
+                            Sign up
+                        </motion.button>
                     </div>
 
                     {/* Mobile burger */}
